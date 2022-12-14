@@ -235,9 +235,9 @@ public final class FailsafeModJsonToTableRowTransformer {
         }
 
         // For "NEW_ROW" value capture type, we can get all columns from mod.
-        // if (mod.getValueCaptureType() == ValueCaptureType.NEW_ROW) {
-        //         //   return tableRow;
-        //         // }
+        if (mod.getValueCaptureType() == ValueCaptureType.NEW_ROW) {
+          return tableRow;
+        }
 
         // For "UPDATE" mod, the Mod only contains the changed columns, unchanged tracked columns
         // are not included, so we need to do a snapshot read to Spanner to get the full row image
