@@ -78,7 +78,7 @@ public class BigtableChangeStreamsToGcs {
 
         final Pipeline pipeline = Pipeline.create(options);
 
-        // Get the Spanner project, instance, database, and change stream parameters.
+        // Get the Bigtable project, instance, database, and change stream parameters.
         String projectId = getProjectId(options);
         String instanceId = options.getBigtableInstanceId();
 

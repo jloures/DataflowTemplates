@@ -22,7 +22,6 @@
   <repositories>
     <repository>
       <id>artifact-registry</id>
-      <!--suppress UnresolvedMavenProperty -->
       <url>${env.BEAM_ARTIFACT_REGISTRY_URI}</url>
       <releases>
         <enabled>true</enabled>
