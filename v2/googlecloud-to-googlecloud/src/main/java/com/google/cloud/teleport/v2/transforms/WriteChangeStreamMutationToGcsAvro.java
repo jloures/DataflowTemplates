@@ -16,38 +16,31 @@
 package com.google.cloud.teleport.v2.transforms;
 
 import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.BIGTABLEROW;
-import static org.apache.beam.sdk.transforms.FlatMapElements.*;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import org.apache.beam.sdk.transforms.FlatMapElements;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.teleport.bigtable.BigtableRow;
 import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogColumns;
 import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogEntry;
 import com.google.cloud.teleport.v2.utils.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
-import com.google.protobuf.Timestamp;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.io.FileBasedSink;
 import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.PipelineOptions;
-import org.apache.beam.sdk.transforms.FlatMapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
-import org.apache.beam.sdk.values.POutput;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,10 +56,11 @@ public abstract class WriteChangeStreamMutationToGcsAvro
   @VisibleForTesting protected static final String DEFAULT_OUTPUT_FILE_PREFIX = "output";
   /* Logger for class. */
   private static final Logger LOG = LoggerFactory.getLogger(WriteChangeStreamMutationToGcsAvro.class);
+  private static final long serialVersionUID = 825905520835363852L;
 
   private static long counter = 0;
 
-  private static UUID workerId = UUID.randomUUID();
+  private static final UUID workerId = UUID.randomUUID();
 
   public static WriteToGcsBuilder newBuilder() {
     return new AutoValue_WriteChangeStreamMutationToGcsAvro.Builder();
@@ -97,7 +91,7 @@ public abstract class WriteChangeStreamMutationToGcsAvro
            * The {@link withNumShards} option specifies the number of shards passed by the user.
            * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
            */
-          .apply("Transform to Avro BIGTABLEROW", FlatMapElements.via(
+          .apply("Transform to Avro BigtableRow", FlatMapElements.via(
               new SimpleFunction<ChangeStreamMutation, List<BigtableRow>>() {
                 @Override
                 public List<BigtableRow> apply(ChangeStreamMutation mutation) {
@@ -108,7 +102,9 @@ public abstract class WriteChangeStreamMutationToGcsAvro
                       ignoreColumnFamilies()
                   );
                   for (ChangelogEntry entry : validEntries) {
-                    rowEntries.add(createBigtableRow(mutation, entry));
+                    rowEntries.add(
+                        BigtableUtils.createBigtableRow(mutation, entry, workerId, counter)
+                    );
                   }
                   return rowEntries;
                 }
@@ -138,16 +134,15 @@ public abstract class WriteChangeStreamMutationToGcsAvro
            * The {@link withNumShards} option specifies the number of shards passed by the user.
            * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
            */
-          .apply("Transform to Avro SIMPLE", FlatMapElements.via(
+          .apply("Transform to Avro Simple", FlatMapElements.via(
               new SimpleFunction<ChangeStreamMutation, List<ChangelogEntry>>() {
                 @Override
                 public List<ChangelogEntry> apply(ChangeStreamMutation mutation) {
-                  List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
+                  return BigtableUtils.getValidEntries(
                       mutation,
                       ignoreColumns(),
                       ignoreColumnFamilies()
                   );
-                  return validEntries;
                 }
               }))
           .apply(
@@ -167,143 +162,8 @@ public abstract class WriteChangeStreamMutationToGcsAvro
                   .withWindowedWrites()
                   .withNumShards(numShards()));
     }
-
-    }
-
-  private com.google.cloud.teleport.bigtable.BigtableRow createBigtableRow(
-      ChangeStreamMutation mutation,
-      ChangelogEntry entry
-  ) {
-    java.util.List<com.google.cloud.teleport.bigtable.BigtableCell> cells = new ArrayList<>();
-
-    /**
-     * Setting the cells appropriate values for ech column qualifier
-     */
-    // row_key
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.ROW_KEY.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        mutation.getRowKey().asReadOnlyByteBuffer()
-    ));
-
-    // mod_type
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.MOD_TYPE.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        entry.getModType().getPropertyNameAsByteBuffer()
-    ));
-
-    // is_gc
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.IS_GC.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        getByteBufferFromString(entry.getIsGc().toString())
-    ));
-
-    // tiebreaker
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.TIEBREAKER.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getTieBreaker()))
-    ));
-
-    // commit_timestamp
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.COMMIT_TIMESTAMP.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(mutation.getCommitTimestamp()))
-    ));
-
-    // column_family
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.COLUMN_FAMILY.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getTieBreaker()))
-    ));
-
-    // low_watermark
-    cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-        BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-        ChangelogColumns.LOW_WATERMARK.getColumnNameAsByteBuffer(),
-        entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getLowWatermark()))
-    ));
-
-    if (entry.getColumn() != null) {
-      // column
-      cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-          BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-          ChangelogColumns.LOW_WATERMARK.getColumnNameAsByteBuffer(),
-          entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getLowWatermark()))
-      ));
-    }
-
-    if (entry.getTimestamp() != null) {
-      // timestamp
-      cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-          BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-          ChangelogColumns.TIMESTAMP.getColumnNameAsByteBuffer(),
-          entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestamp()))
-      ));
-    }
-
-    if (entry.getTimestampFrom() != null) {
-      // timestamp_from
-      cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-          BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-          ChangelogColumns.TIMESTAMP_FROM.getColumnNameAsByteBuffer(),
-          entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestampFrom()))
-      ));
-    }
-
-    if (entry.getTimestampTo() != null) {
-      // timestamp_to
-      cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-          BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-          ChangelogColumns.TIMESTAMP_TO.getColumnNameAsByteBuffer(),
-          entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestampTo()))
-      ));
-    }
-
-    if (entry.getValue() != null) {
-      // value
-      cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
-          BigtableUtils.BIGTABLE_ROW_COLUMN_FAMILY,
-          ChangelogColumns.TIMESTAMP_FROM.getColumnNameAsByteBuffer(),
-          entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getValue()))
-      ));
-    }
-
-    return new BigtableRow(
-        createChangelogRowKey(mutation.getCommitTimestamp()),
-        cells
-    );
   }
 
-  private ByteBuffer getByteBufferFromString(String s) {
-    return ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private ByteBuffer createChangelogRowKey(Timestamp commitTimestamp) {
-    String rowKey = (commitTimestamp.toString()
-        + BigtableUtils.BIGTABLE_ROW_KEY_DELIMITER
-        + this.workerId.toString()
-        + BigtableUtils.BIGTABLE_ROW_KEY_DELIMITER
-        + this.counter++);
-
-    return ByteBuffer.wrap(rowKey.getBytes(StandardCharsets.UTF_8));
-  }
   /**
    * The {@link WriteToGcsAvroOptions} interface provides the custom execution options passed by the
    * executor at the command-line.
@@ -317,7 +177,7 @@ public abstract class WriteChangeStreamMutationToGcsAvro
         example = "gs://your-bucket/your-path")
     String getGcsOutputDirectory();
 
-    void setGcsOutputDirectory(String gcsOutputDirectory);
+    //void setGcsOutputDirectory(String gcsOutputDirectory);
 
     @TemplateParameter.Text(
         order = 2,

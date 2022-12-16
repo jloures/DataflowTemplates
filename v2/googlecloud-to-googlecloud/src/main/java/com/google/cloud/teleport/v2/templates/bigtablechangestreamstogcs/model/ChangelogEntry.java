@@ -9,8 +9,6 @@ import com.google.cloud.bigtable.data.v2.models.SetCell;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import java.io.Serializable;
-import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.Objects;
 import org.apache.avro.reflect.Nullable;
 import org.apache.beam.sdk.coders.AvroCoder;
@@ -18,6 +16,11 @@ import org.apache.beam.sdk.coders.DefaultCoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The {@link ChangelogEntry} class is used when writting into GCS.
+ * Note that it may be converted into a BigtableRow format if the
+ * selection is passed as a parameter.
+ */
 @DefaultCoder(AvroCoder.class)
 public final class ChangelogEntry implements Serializable {
 

@@ -3,6 +3,10 @@ package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * {@link ModType} represents the type of Modification that CDC
+ * {@link com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation} entries represent.
+ */
 public enum ModType {
   SET_CELL("SET_CELL"),
   DELETE_FAMILY("DELETE_FAMILY"),
