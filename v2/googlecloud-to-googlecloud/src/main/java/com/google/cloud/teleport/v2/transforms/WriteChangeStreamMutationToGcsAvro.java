@@ -16,6 +16,7 @@
 package com.google.cloud.teleport.v2.transforms;
 
 import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.BIGTABLEROW;
+import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.SIMPLE;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
@@ -91,24 +92,8 @@ public abstract class WriteChangeStreamMutationToGcsAvro
            * The {@link withNumShards} option specifies the number of shards passed by the user.
            * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
            */
-          .apply("Transform to Avro BigtableRow", FlatMapElements.via(
-              new SimpleFunction<ChangeStreamMutation, List<BigtableRow>>() {
-                @Override
-                public List<BigtableRow> apply(ChangeStreamMutation mutation) {
-                  List<BigtableRow> rowEntries = new ArrayList<>();
-                  List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
-                      mutation,
-                      ignoreColumns(),
-                      ignoreColumnFamilies()
-                  );
-                  for (ChangelogEntry entry : validEntries) {
-                    rowEntries.add(
-                        BigtableUtils.createBigtableRow(mutation, entry, workerId, counter)
-                    );
-                  }
-                  return rowEntries;
-                }
-              }))
+          .apply("Transform to Avro BigtableRow",
+              FlatMapElements.via(new ProcessChangeStreamMutationToGcsAvroBigtableRowSchemaFormat()))
           .apply(
               "Writing as Avro",
               AvroIO.write(com.google.cloud.teleport.bigtable.BigtableRow.class)
@@ -134,17 +119,8 @@ public abstract class WriteChangeStreamMutationToGcsAvro
            * The {@link withNumShards} option specifies the number of shards passed by the user.
            * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
            */
-          .apply("Transform to Avro Simple", FlatMapElements.via(
-              new SimpleFunction<ChangeStreamMutation, List<ChangelogEntry>>() {
-                @Override
-                public List<ChangelogEntry> apply(ChangeStreamMutation mutation) {
-                  return BigtableUtils.getValidEntries(
-                      mutation,
-                      ignoreColumns(),
-                      ignoreColumnFamilies()
-                  );
-                }
-              }))
+          .apply("Transform to Avro Simple",
+              FlatMapElements.via(new ProcessChangeStreamMutationToGcsAvroSimpleSchemaFormat()))
           .apply(
               "Writing as Avro",
               AvroIO.write(ChangelogEntry.class)
@@ -164,6 +140,39 @@ public abstract class WriteChangeStreamMutationToGcsAvro
     }
   }
 
+  private class ProcessChangeStreamMutationToGcsAvroSimpleSchemaFormat extends
+      SimpleFunction<ChangeStreamMutation, List<ChangelogEntry>> {
+
+    @Override
+    public List<ChangelogEntry> apply(ChangeStreamMutation mutation) {
+      return BigtableUtils.getValidEntries(
+          mutation,
+          ignoreColumns(),
+          ignoreColumnFamilies()
+      );
+    }
+  }
+
+  private class ProcessChangeStreamMutationToGcsAvroBigtableRowSchemaFormat extends
+      SimpleFunction<ChangeStreamMutation, List<com.google.cloud.teleport.bigtable.BigtableRow>> {
+
+    @Override
+    public List<com.google.cloud.teleport.bigtable.BigtableRow> apply(
+        ChangeStreamMutation mutation) {
+      List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
+          mutation,
+          ignoreColumns(),
+          ignoreColumnFamilies()
+      );
+      List<com.google.cloud.teleport.bigtable.BigtableRow> rowEntries = new ArrayList<>();
+      for (ChangelogEntry entry : validEntries) {
+        rowEntries.add(
+            BigtableUtils.createBigtableRow(mutation, entry, workerId, counter)
+        );
+      }
+      return rowEntries;
+    }
+  }
   /**
    * The {@link WriteToGcsAvroOptions} interface provides the custom execution options passed by the
    * executor at the command-line.

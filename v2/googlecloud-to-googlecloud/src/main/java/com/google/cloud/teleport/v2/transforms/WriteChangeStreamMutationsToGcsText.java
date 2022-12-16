@@ -95,36 +95,8 @@ public abstract class WriteChangeStreamMutationsToGcsText
          * Converting ChangeStreamMutations to JSON text using DoFn and {@link
          * ChangeStreamMutationToJsonTextFn} class.
          */
-        .apply("Transform to JSON Text", FlatMapElements.via(
-            new SimpleFunction<ChangeStreamMutation, List<String>>() {
-              @Override
-              public List<String> apply(ChangeStreamMutation mutation) {
-                List<String> jsonEntries = new ArrayList<>();
-                List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
-                    mutation,
-                    ignoreColumns(),
-                    ignoreColumnFamilies()
-                );
-                for (ChangelogEntry entry : validEntries) {
-                  String jsonEntry = null;
-                  switch (schemaOutputFormat()) {
-                    case BIGTABLEROW:
-                      jsonEntry = gson.toJson(
-                          BigtableUtils.createBigtableRow(mutation, entry, workerId, counter),
-                          BigtableRow.class
-                      );
-                      break;
-                    case SIMPLE:
-                      jsonEntry = gson.toJson(entry, ChangelogEntry.class);
-                      break;
-                  }
-                  if (jsonEntry == null || jsonEntry.length() > 0) {
-                    jsonEntries.add(jsonEntry);
-                  }
-                }
-                return jsonEntries;
-              }
-            }))
+        .apply("Transform to JSON Text",
+            FlatMapElements.via(new ProcessChangeStreamMutationToGcsText()))
         /*
          * Writing as text file using {@link TextIO}.
          *
@@ -148,6 +120,38 @@ public abstract class WriteChangeStreamMutationsToGcsText
                         .getCurrentDirectory())
                 .withWindowedWrites()
                 .withNumShards(numShards()));
+  }
+
+  private class ProcessChangeStreamMutationToGcsText extends
+      SimpleFunction<ChangeStreamMutation, List<String>> {
+
+    @Override
+    public List<String> apply(ChangeStreamMutation mutation) {
+      List<String> jsonEntries = new ArrayList<>();
+      List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
+          mutation,
+          ignoreColumns(),
+          ignoreColumnFamilies()
+      );
+      for (ChangelogEntry entry : validEntries) {
+        String jsonEntry = null;
+        switch (schemaOutputFormat()) {
+          case BIGTABLEROW:
+            jsonEntry = gson.toJson(
+                BigtableUtils.createBigtableRow(mutation, entry, workerId, counter),
+                BigtableRow.class
+            );
+            break;
+          case SIMPLE:
+            jsonEntry = gson.toJson(entry, ChangelogEntry.class);
+            break;
+        }
+        if (jsonEntry == null || jsonEntry.length() > 0) {
+          jsonEntries.add(jsonEntry);
+        }
+      }
+      return jsonEntries;
+    }
   }
 
   /**
