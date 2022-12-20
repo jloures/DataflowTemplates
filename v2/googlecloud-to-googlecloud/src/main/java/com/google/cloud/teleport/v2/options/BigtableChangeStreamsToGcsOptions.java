@@ -16,8 +16,6 @@
 package com.google.cloud.teleport.v2.options;
 
 import com.google.cloud.teleport.metadata.TemplateParameter;
-import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationToGcsAvro;
-import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationsToGcsText;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.FileFormat;
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
@@ -28,9 +26,7 @@ import org.apache.beam.sdk.options.Validation;
  * The {@link BigtableChangeStreamsToGcsOptions} interface provides the custom execution options
  * passed by the executor at the command-line.
  */
-public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions, DataflowPipelineOptions,
-    WriteChangeStreamMutationToGcsAvro.WriteToGcsAvroOptions,
-    WriteChangeStreamMutationsToGcsText.WriteToGcsTextOptions {
+public interface BigtableChangeStreamsToGcsOptions extends DataflowPipelineOptions {
     @TemplateParameter.ProjectId(
         order = 1,
         optional = true,
@@ -144,4 +140,59 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
 
     void setSchemaOutputFormat(BigtableSchemaFormat outputSchemaFormat);
 
+    @TemplateParameter.Text(
+        order = 13,
+        optional = true,
+        description = "Ignore Column Families",
+        helpText = "A comma-separated list of column families for which changes are to be skipped.",
+        example = "cf1,cf2,cf3")
+    @Default.String("")
+    String getIgnoreColumnFamilies();
+
+    void setIgnoreColumnFamilies(String ignoreColumnFamilies);
+
+    @TemplateParameter.Text(
+        order = 14,
+        optional = true,
+        description = "Ignore Columns",
+        helpText = "A comma-separated list of columnFamily:columnName values for which changes are to be skipped.",
+        example = "cf1:c1,cf2:c2,cf3:c3")
+    @Default.String("")
+    String getIgnoreColumns();
+
+    void setIgnoreColumns(String ignoreColumns);
+
+    @TemplateParameter.GcsWriteFolder(
+        order = 15,
+        description = "Output file directory in Cloud Storage",
+        helpText =
+            "The path and filename prefix for writing output files. Must end with a slash. "
+                + "DateTime formatting is used to parse directory path for date & time formatters.",
+        example = "gs://your-bucket/your-path")
+    String getGcsOutputDirectory();
+
+    void setGcsOutputDirectory(String gcsOutputDirectory);
+
+    @TemplateParameter.Text(
+        order = 16,
+        description = "Output filename prefix of the files to write",
+        helpText = "The prefix to place on each windowed file.",
+        example = "output-")
+    @Default.String("output")
+    String getOutputFilenamePrefix();
+
+    void setOutputFilenamePrefix(String outputFilenamePrefix);
+
+    @TemplateParameter.Integer(
+        order = 17,
+        optional = true,
+        description = "Maximum output shards",
+        helpText =
+            "The maximum number of output shards produced when writing. A higher number of "
+                + "shards means higher throughput for writing to Cloud Storage, but potentially higher "
+                + "data aggregation cost across shards when processing output Cloud Storage files.")
+    @Default.Integer(20)
+    Integer getNumShards();
+
+    void setNumShards(Integer numShards);
 }
