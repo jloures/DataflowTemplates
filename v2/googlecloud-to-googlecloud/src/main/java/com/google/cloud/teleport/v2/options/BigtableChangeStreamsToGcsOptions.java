@@ -28,7 +28,7 @@ import org.apache.beam.sdk.options.Validation;
  * The {@link BigtableChangeStreamsToGcsOptions} interface provides the custom execution options
  * passed by the executor at the command-line.
  */
-public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions, DataflowPipelineOptions,
+public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions,
     WriteChangeStreamMutationToGcsAvro.WriteToGcsAvroOptions,
     WriteChangeStreamMutationsToGcsText.WriteToGcsTextOptions {
     @TemplateParameter.ProjectId(

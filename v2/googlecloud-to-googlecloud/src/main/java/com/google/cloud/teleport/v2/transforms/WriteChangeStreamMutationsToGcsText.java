@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.io.FileBasedSink;
 import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.options.Default;
@@ -60,9 +61,9 @@ public abstract class WriteChangeStreamMutationsToGcsText
     extends PTransform<PCollection<ChangeStreamMutation>, PDone> {
   private static Gson gson = new Gson();
   
-  private static long counter = 0;
+  private static final AtomicLong counter = new AtomicLong(0);
   
-  private static UUID workerId = UUID.randomUUID();
+  private static String workerId = UUID.randomUUID().toString();
 
   @VisibleForTesting
   protected static final String DEFAULT_OUTPUT_FILE_PREFIX = "output";
@@ -265,7 +266,9 @@ public abstract class WriteChangeStreamMutationsToGcsText
       HashSet<String> parsedColumnFamilies = new HashSet<>();
       for (String word : ignoreColumnFamilies.split(",")) {
         String columnFamily = word.trim();
-        checkArgument(columnFamily.length() > 0, "Column Family provided: " + columnFamily + " is an empty string and is invalid");
+        if (columnFamily.length() == 0) {
+          continue;
+        }
         parsedColumnFamilies.add(columnFamily);
       }
       return setIgnoreColumnFamilies(parsedColumnFamilies);
@@ -276,6 +279,9 @@ public abstract class WriteChangeStreamMutationsToGcsText
       HashSet<String> parsedColumns = new HashSet<>();
       for (String word : ignoreColumns.split(",")) {
         String trimmedColumns = word.trim();
+        if (trimmedColumns.length() == 0) {
+          continue;
+        }
         checkArgument(trimmedColumns.matches(BigtableUtils.columnPattern), "The Column specified does not follow the required format of 'cf1:c1, cf2:c2 ...'");
         parsedColumns.add(trimmedColumns);
       }

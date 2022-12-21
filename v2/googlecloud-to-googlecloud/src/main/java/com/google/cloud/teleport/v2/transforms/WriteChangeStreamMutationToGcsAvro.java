@@ -20,6 +20,7 @@ import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchem
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.transforms.FlatMapElements;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
@@ -59,9 +60,9 @@ public abstract class WriteChangeStreamMutationToGcsAvro
   private static final Logger LOG = LoggerFactory.getLogger(WriteChangeStreamMutationToGcsAvro.class);
   private static final long serialVersionUID = 825905520835363852L;
 
-  private static long counter = 0;
+  private static final AtomicLong counter = new AtomicLong(0);
 
-  private static final UUID workerId = UUID.randomUUID();
+  private static final String workerId = UUID.randomUUID().toString();
 
   public static WriteToGcsBuilder newBuilder() {
     return new AutoValue_WriteChangeStreamMutationToGcsAvro.Builder();
@@ -119,8 +120,10 @@ public abstract class WriteChangeStreamMutationToGcsAvro
            * The {@link withNumShards} option specifies the number of shards passed by the user.
            * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
            */
+          //filtering will return a common Class of PCollection ChangelogEntry
           .apply("Transform to Avro Simple",
               FlatMapElements.via(new ProcessChangeStreamMutationToGcsAvroSimpleSchemaFormat()))
+          // Do i have to format
           .apply(
               "Writing as Avro",
               AvroIO.write(ChangelogEntry.class)
@@ -246,7 +249,9 @@ public abstract class WriteChangeStreamMutationToGcsAvro
       HashSet<String> parsedColumnFamilies = new HashSet<>();
       for (String word : ignoreColumnFamilies.split(",")) {
         String columnFamily = word.trim();
-        checkArgument(columnFamily.length() > 0, "Column Family provided: " + columnFamily + " is an empty string and is invalid");
+        if (columnFamily.length() == 0) {
+          continue;
+        }
         parsedColumnFamilies.add(columnFamily);
       }
       return setIgnoreColumnFamilies(parsedColumnFamilies);
@@ -257,6 +262,9 @@ public abstract class WriteChangeStreamMutationToGcsAvro
       HashSet<String> parsedColumns = new HashSet<>();
       for (String word : ignoreColumns.split(",")) {
         String trimmedColumns = word.trim();
+        if (trimmedColumns.length() == 0) {
+          continue;
+        }
         checkArgument(trimmedColumns.matches(BigtableUtils.columnPattern), "The Column specified does not follow the required format of 'cf1:c1, cf2:c2 ...'");
         parsedColumns.add(trimmedColumns);
       }

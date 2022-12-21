@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A set of helper functions and classes for Bigtable.
@@ -46,8 +46,8 @@ public class BigtableUtils {
   public static com.google.cloud.teleport.bigtable.BigtableRow createBigtableRow(
       ChangeStreamMutation mutation,
       ChangelogEntry entry,
-      UUID workerId,
-      long counter
+      String workerId,
+      AtomicLong counter
   ) {
     java.util.List<com.google.cloud.teleport.bigtable.BigtableCell> cells = new ArrayList<>();
 
@@ -167,12 +167,12 @@ public class BigtableUtils {
     return ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8));
   }
 
-  private static ByteBuffer createChangelogRowKey(Timestamp commitTimestamp, UUID workerId, long counter) {
+  private static ByteBuffer createChangelogRowKey(Timestamp commitTimestamp, String workerId, AtomicLong counter) {
     String rowKey = (commitTimestamp.toString()
         + BigtableUtils.bigtableRowKeyDelimiter
         + workerId
         + BigtableUtils.bigtableRowKeyDelimiter
-        + counter++);
+        + counter.incrementAndGet());
 
     return ByteBuffer.wrap(rowKey.getBytes(StandardCharsets.UTF_8));
   }
@@ -182,6 +182,7 @@ public class BigtableUtils {
       HashSet<String> ignoreColumns,
       HashSet<String> ignoreColumnFamilies
   ) {
+    // filter first and then format
     List<ChangelogEntry> validEntries = new ArrayList<>();
     for (Entry entry : mutation.getEntries()) {
       if (entry instanceof SetCell) {

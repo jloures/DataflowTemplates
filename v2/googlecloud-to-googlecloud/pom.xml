@@ -22,13 +22,18 @@
   <repositories>
     <repository>
       <id>artifact-registry</id>
-      <url>${env.BEAM_ARTIFACT_REGISTRY_URI}</url>
+      <url>artifactregistry://us-central1-maven.pkg.dev/google.com%3Acloud-bigtable-dev/test-bigtable-change-stream-preview</url>
       <releases>
         <enabled>true</enabled>
       </releases>
       <snapshots>
         <enabled>true</enabled>
       </snapshots>
+    </repository>
+    <repository>
+      <!-- Required for io.confluent:kafka-avro-serializer artifact -->
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
     </repository>
   </repositories>
 
@@ -58,7 +63,6 @@
   </dependencyManagement>
 
   <build>
-    <directory>${basedir}/target</directory>
     <extensions>
       <extension>
         <groupId>com.google.cloud.artifactregistry</groupId>
@@ -67,13 +71,13 @@
       </extension>
     </extensions>
     <plugins>
-        <plugin>
-          <groupId>org.apache.avro</groupId>
-          <artifactId>avro-maven-plugin</artifactId>
-          <version>${avro.version}</version>
-          <!-- For compatibility reasons (e.g. IntelliJ), the configuration must be duplicated here
-            and under execution. -->
-          <configuration>
+      <plugin>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro-maven-plugin</artifactId>
+        <version>${avro.version}</version>
+        <!-- For compatibility reasons (e.g. IntelliJ), the configuration must be duplicated here
+          and under execution. -->
+        <configuration>
           <sourceDirectory>${project.basedir}/src/main/resources/schema/avro
           </sourceDirectory>
         </configuration>
@@ -114,6 +118,16 @@
       <groupId>com.google.api.grpc</groupId>
       <artifactId>proto-google-cloud-bigtable-v2</artifactId>
       <version>2.17.1-change-streams-temp1-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.api.grpc</groupId>
+      <artifactId>grpc-google-cloud-bigtable-v2</artifactId>
+      <version>2.17.1-change-streams-temp1-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.api</groupId>
+      <artifactId>gax</artifactId>
+      <version>2.19.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.beam</groupId>

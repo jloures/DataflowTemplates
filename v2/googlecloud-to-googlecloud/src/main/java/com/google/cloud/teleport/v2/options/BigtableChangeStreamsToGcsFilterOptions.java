@@ -1,13 +1,14 @@
 package com.google.cloud.teleport.v2.options;
 
 import com.google.cloud.teleport.metadata.TemplateParameter;
+import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
 import org.apache.beam.sdk.options.Default;
 
 /**
  * The {@link BigtableChangeStreamsToGcsFilterOptions} interface provides the custom execution options
  * passed by the executor at the command-line for {@ChangeStreamMutation} entries to be filtered out.
  */
-public interface BigtableChangeStreamsToGcsFilterOptions {
+public interface BigtableChangeStreamsToGcsFilterOptions extends DataflowPipelineOptions {
 
   @TemplateParameter.Text(
       order = 9,
