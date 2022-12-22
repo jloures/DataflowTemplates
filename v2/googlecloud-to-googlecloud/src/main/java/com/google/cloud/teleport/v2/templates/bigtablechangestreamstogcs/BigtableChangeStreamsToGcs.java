@@ -125,7 +125,7 @@ public class BigtableChangeStreamsToGcs {
                     .withStartTime(startTimestamp)
                     .withEndTime(endTimestamp)
                     .withMetadataTableTableId(metadataTableName))
-            .apply(ParDo.of(
+            .apply("Add Processing Time", ParDo.of(
                 new DoFn<KV<ByteString, ChangeStreamMutation>, ChangeStreamMutation>() {
                     @ProcessElement
                     public void processElement(

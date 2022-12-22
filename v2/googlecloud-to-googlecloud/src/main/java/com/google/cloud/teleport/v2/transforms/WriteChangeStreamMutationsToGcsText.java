@@ -15,6 +15,7 @@
  */
 package com.google.cloud.teleport.v2.transforms;
 
+import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.BIGTABLEROW;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
@@ -24,18 +25,11 @@ import com.google.cloud.teleport.bigtable.BigtableRow;
 import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
 import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsFilterOptions;
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogColumns;
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogEntry;
 import com.google.cloud.teleport.v2.utils.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
 import com.google.gson.Gson;
-import com.google.protobuf.Timestamp;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.io.FileBasedSink;
@@ -43,10 +37,12 @@ import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.transforms.FlatMapElements;
+import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
+import org.apache.beam.sdk.values.TypeDescriptors;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +55,7 @@ import org.slf4j.LoggerFactory;
 @AutoValue
 public abstract class WriteChangeStreamMutationsToGcsText
     extends PTransform<PCollection<ChangeStreamMutation>, PDone> {
-  private static Gson gson = new Gson();
+  private static final Gson gson = new Gson();
   
   private static final AtomicLong counter = new AtomicLong(0);
   
@@ -91,20 +87,46 @@ public abstract class WriteChangeStreamMutationsToGcsText
 
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
-    return mutations
-        /*
-         * Converting ChangeStreamMutations to JSON text using DoFn and {@link
-         * ChangeStreamMutationToJsonTextFn} class.
-         */
-        .apply("Transform to JSON Text",
-            FlatMapElements.via(new ProcessChangeStreamMutationToGcsText()))
-        /*
-         * Writing as text file using {@link TextIO}.
-         *
-         * The {@link WindowedFilenamePolicy} class specifies the file path for writing the file.
-         * The {@link withNumShards} option specifies the number of shards passed by the user.
-         * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
-         */
+    PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
+        .apply("ChangeStreamMutation to ChangelogEntry",
+            FlatMapElements.via(new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
+                ignoreColumnFamilies())));
+    /*
+     * Writing as text file using {@link TextIO}.
+     *
+     * The {@link WindowedFilenamePolicy} class specifies the file path for writing the file.
+     * The {@link withNumShards} option specifies the number of shards passed by the user.
+     * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
+     */
+    if (schemaOutputFormat() == BIGTABLEROW) {
+      return changelogEntry
+          .apply("ChangelogEntry to BigtableRow",
+              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter)))
+          .apply(MapElements.into(TypeDescriptors.strings())
+              .via((com.google.cloud.teleport.bigtable.BigtableRow row) -> gson.toJson(row,
+                  com.google.cloud.teleport.bigtable.BigtableRow.class)))
+          .apply(
+              "Writing as Text",
+              TextIO.write()
+                  .to(
+                      WindowedFilenamePolicy.writeWindowedFiles()
+                          .withOutputDirectory(gcsOutputDirectory())
+                          .withOutputFilenamePrefix(outputFilenamePrefix())
+                          .withShardTemplate(WriteToGCSUtility.SHARD_TEMPLATE)
+                          .withSuffix(
+                              WriteToGCSUtility.FILE_SUFFIX_MAP.get(
+                                  WriteToGCSUtility.FileFormat.TEXT)))
+                  .withTempDirectory(
+                      FileBasedSink.convertToFileResourceIfPossible(tempLocation())
+                          .getCurrentDirectory())
+                  .withWindowedWrites()
+                  .withNumShards(numShards()));
+    }
+
+    return changelogEntry
+        .apply(MapElements.into(TypeDescriptors.strings())
+            .via((com.google.cloud.teleport.bigtable.ChangelogEntry row) -> gson.toJson(row,
+                com.google.cloud.teleport.bigtable.ChangelogEntry.class)))
         .apply(
             "Writing as Text",
             TextIO.write()
@@ -123,35 +145,15 @@ public abstract class WriteChangeStreamMutationsToGcsText
                 .withNumShards(numShards()));
   }
 
-  private class ProcessChangeStreamMutationToGcsText extends
-      SimpleFunction<ChangeStreamMutation, List<String>> {
+  private class BigtableChangelogEntryToJsonTextFn extends
+      SimpleFunction<com.google.cloud.teleport.bigtable.ChangelogEntry, String> {
 
     @Override
-    public List<String> apply(ChangeStreamMutation mutation) {
-      List<String> jsonEntries = new ArrayList<>();
-      List<ChangelogEntry> validEntries = BigtableUtils.getValidEntries(
-          mutation,
-          ignoreColumns(),
-          ignoreColumnFamilies()
+    public String apply(com.google.cloud.teleport.bigtable.ChangelogEntry entry) {
+      return gson.toJson(
+          BigtableUtils.createBigtableRow(entry, workerId, counter),
+          BigtableRow.class
       );
-      for (ChangelogEntry entry : validEntries) {
-        String jsonEntry = null;
-        switch (schemaOutputFormat()) {
-          case BIGTABLEROW:
-            jsonEntry = gson.toJson(
-                BigtableUtils.createBigtableRow(mutation, entry, workerId, counter),
-                BigtableRow.class
-            );
-            break;
-          case SIMPLE:
-            jsonEntry = gson.toJson(entry, ChangelogEntry.class);
-            break;
-        }
-        if (jsonEntry == null || jsonEntry.length() > 0) {
-          jsonEntries.add(jsonEntry);
-        }
-      }
-      return jsonEntries;
     }
   }
 
