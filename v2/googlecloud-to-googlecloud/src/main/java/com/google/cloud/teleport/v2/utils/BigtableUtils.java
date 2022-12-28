@@ -9,8 +9,8 @@ import com.google.cloud.bigtable.data.v2.models.SetCell;
 import com.google.cloud.teleport.bigtable.BigtableRow;
 import com.google.cloud.teleport.bigtable.ChangelogEntry;
 import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogColumns;
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ModType;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,7 +43,7 @@ public class BigtableUtils {
       return false;
     }
 
-    String columnFamilyAndQualifier = familyName + ":" + Objects.toString(qualifierName);
+    String columnFamilyAndQualifier = familyName + ":" + qualifierName;
 
     return !ignoreColumns.contains(columnFamilyAndQualifier);
   }
@@ -51,7 +51,8 @@ public class BigtableUtils {
   public static com.google.cloud.teleport.bigtable.BigtableRow createBigtableRow(
       com.google.cloud.teleport.bigtable.ChangelogEntry entry,
       String workerId,
-      AtomicLong counter
+      AtomicLong counter,
+      Charset charset
   ) {
     java.util.List<com.google.cloud.teleport.bigtable.BigtableCell> cells = new ArrayList<>();
 
@@ -68,7 +69,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.MOD_TYPE.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(entry.getModType().toString())
+        getByteBufferFromString(entry.getModType().toString(), charset)
     ));
 
     // is_gc
@@ -76,7 +77,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.IS_GC.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(entry.getIsGc().toString())
+        getByteBufferFromString(entry.getIsGc().toString(), charset)
     ));
 
     // tiebreaker
@@ -84,7 +85,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.TIEBREAKER.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getTieBreaker()))
+        getByteBufferFromString(String.valueOf(entry.getTieBreaker()), charset)
     ));
 
     // commit_timestamp
@@ -92,7 +93,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.COMMIT_TIMESTAMP.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getCommitTimestamp()))
+        getByteBufferFromString(String.valueOf(entry.getCommitTimestamp()), charset)
     ));
 
     // column_family
@@ -100,7 +101,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.COLUMN_FAMILY.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getTieBreaker()))
+        getByteBufferFromString(String.valueOf(entry.getTieBreaker()), charset)
     ));
 
     // low_watermark
@@ -108,7 +109,7 @@ public class BigtableUtils {
         BigtableUtils.bigtableRowColumnFamilyName,
         ChangelogColumns.LOW_WATERMARK.getColumnNameAsByteBuffer(),
         entry.getTimestamp(),
-        getByteBufferFromString(String.valueOf(entry.getLowWatermark()))
+        getByteBufferFromString(String.valueOf(entry.getLowWatermark()), charset)
     ));
 
     if (entry.getColumn() != null) {
@@ -117,7 +118,7 @@ public class BigtableUtils {
           BigtableUtils.bigtableRowColumnFamilyName,
           ChangelogColumns.LOW_WATERMARK.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getLowWatermark()))
+          getByteBufferFromString(String.valueOf(entry.getLowWatermark()), charset)
       ));
     }
 
@@ -127,7 +128,7 @@ public class BigtableUtils {
           BigtableUtils.bigtableRowColumnFamilyName,
           ChangelogColumns.TIMESTAMP.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestamp()))
+          getByteBufferFromString(String.valueOf(entry.getTimestamp()), charset)
       ));
     }
 
@@ -137,7 +138,7 @@ public class BigtableUtils {
           BigtableUtils.bigtableRowColumnFamilyName,
           ChangelogColumns.TIMESTAMP_FROM.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestampFrom()))
+          getByteBufferFromString(String.valueOf(entry.getTimestampFrom()), charset)
       ));
     }
 
@@ -147,7 +148,7 @@ public class BigtableUtils {
           BigtableUtils.bigtableRowColumnFamilyName,
           ChangelogColumns.TIMESTAMP_TO.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getTimestampTo()))
+          getByteBufferFromString(String.valueOf(entry.getTimestampTo()), charset)
       ));
     }
 
@@ -157,49 +158,56 @@ public class BigtableUtils {
           BigtableUtils.bigtableRowColumnFamilyName,
           ChangelogColumns.TIMESTAMP_FROM.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getValue()))
+          getByteBufferFromString(String.valueOf(entry.getValue()), charset)
       ));
     }
 
     return new BigtableRow(
-        createChangelogRowKey(entry.getCommitTimestamp(), workerId, counter),
+        createChangelogRowKey(entry.getCommitTimestamp(), workerId, counter, charset),
         cells
     );
   }
 
-  private static ByteBuffer getByteBufferFromString(String s) {
-    return ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8));
+  private static ByteBuffer getByteBufferFromString(String s, Charset charset) {
+    return ByteBuffer.wrap(s.getBytes(charset));
   }
 
-  private static ByteBuffer createChangelogRowKey(Long commitTimestamp, String workerId, AtomicLong counter) {
+  private static ByteBuffer createChangelogRowKey(
+      Long commitTimestamp,
+      String workerId,
+      AtomicLong counter,
+      Charset charset) {
     String rowKey = (commitTimestamp.toString()
         + BigtableUtils.bigtableRowKeyDelimiter
         + workerId
         + BigtableUtils.bigtableRowKeyDelimiter
         + counter.incrementAndGet());
 
-    return ByteBuffer.wrap(rowKey.getBytes(StandardCharsets.UTF_8));
+    return ByteBuffer.wrap(rowKey.getBytes(charset));
   }
 
-  public static List<com.google.cloud.teleport.bigtable.ChangelogEntry> getValidEntries(
+  public static List<ChangelogEntry> getValidEntries(
       ChangeStreamMutation mutation,
       HashSet<String> ignoreColumns,
-      HashSet<String> ignoreColumnFamilies
+      HashSet<String> ignoreColumnFamilies,
+      Charset charset
   ) {
     // filter first and then format
-    List<com.google.cloud.teleport.bigtable.ChangelogEntry> validEntries = new ArrayList<>();
+    List<ChangelogEntry> validEntries = new ArrayList<>();
     for (Entry entry : mutation.getEntries()) {
       if (entry instanceof SetCell) {
         SetCell setCell = (SetCell) entry;
         String familyName = setCell.getFamilyName();
-        String qualifierName = setCell.getQualifier().toStringUtf8();
+        String qualifierName ;
+        qualifierName = setCell.getQualifier().toString(charset);
         if (isValidEntry(familyName, qualifierName, ignoreColumns, ignoreColumnFamilies)) {
           validEntries.add(createChangelogEntry(mutation, entry));
         }
       } else if (entry instanceof DeleteCells) {
         DeleteCells deleteCells = (DeleteCells) entry;
         String familyName = deleteCells.getFamilyName();
-        String qualifierName = deleteCells.getQualifier().toStringUtf8();
+        String qualifierName;
+        qualifierName = deleteCells.getQualifier().toString(charset);
         if (isValidEntry(familyName, qualifierName, ignoreColumns, ignoreColumnFamilies)) {
           validEntries.add(createChangelogEntry(mutation, entry));
         }
@@ -212,6 +220,14 @@ public class BigtableUtils {
       }
     }
     return validEntries;
+  }
+
+  public static Charset getCharset(String charset) {
+    if (charset == null) {
+      return StandardCharsets.UTF_8;
+    }
+
+    return StandardCharsets.UTF_8;
   }
 
   private static com.google.cloud.teleport.bigtable.ChangelogEntry createChangelogEntry(

@@ -20,6 +20,8 @@ import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchem
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationsToGcsText.WriteToGcsBuilder;
+import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.transforms.FlatMapElements;
 import com.google.auto.value.AutoValue;
@@ -78,13 +80,15 @@ public abstract class WriteChangeStreamMutationToGcsAvro
 
   public abstract BigtableSchemaFormat schemaOutputFormat();
 
+  public abstract Charset charset();
+
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
     PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
           .apply("ChangeStreamMutation to ChangelogEntry",
               FlatMapElements.via(
                   new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
-                      ignoreColumnFamilies())));
+                      ignoreColumnFamilies(), charset())));
 
     /*
      * Writing as avro file using {@link AvroIO}.
@@ -134,46 +138,6 @@ public abstract class WriteChangeStreamMutationToGcsAvro
                 .withNumShards(numShards()));
   }
 
-  /**
-   * The {@link WriteToGcsAvroOptions} interface provides the custom execution options passed by the
-   * executor at the command-line.
-   */
-  public interface WriteToGcsAvroOptions extends PipelineOptions {
-    @TemplateParameter.GcsWriteFolder(
-        order = 1,
-        description = "Output file directory in Cloud Storage",
-        helpText =
-            "The path and filename prefix for writing output files. Must end with a slash. DateTime formatting is used to parse directory path for date & time formatters.",
-        example = "gs://your-bucket/your-path")
-    String getGcsOutputDirectory();
-
-    void setGcsOutputDirectory(String gcsOutputDirectory);
-
-    @TemplateParameter.Text(
-        order = 2,
-        optional = true,
-        description = "Output filename prefix of the files to write",
-        helpText = "The prefix to place on each windowed file.",
-        example = "output-")
-    @Default.String("output")
-    String getOutputFilenamePrefix();
-
-    void setOutputFilenamePrefix(String outputFilenamePrefix);
-
-    @TemplateParameter.Integer(
-        order = 3,
-        optional = true,
-        description = "Maximum output shards",
-        helpText =
-            "The maximum number of output shards produced when writing. A higher number of "
-                + "shards means higher throughput for writing to Cloud Storage, but potentially higher "
-                + "data aggregation cost across shards when processing output Cloud Storage files.")
-    @Default.Integer(20)
-    Integer getNumShards();
-
-    void setNumShards(Integer numShards);
-  }
-
   /** Builder for {@link WriteChangeStreamMutationToGcsAvro}. */
   @AutoValue.Builder
   public abstract static class WriteToGcsBuilder {
@@ -190,6 +154,12 @@ public abstract class WriteChangeStreamMutationToGcsAvro
     abstract WriteToGcsBuilder setNumShards(Integer numShards);
 
     abstract WriteChangeStreamMutationToGcsAvro autoBuild();
+
+    abstract WriteToGcsBuilder setCharset(Charset charset);
+
+    public WriteToGcsBuilder withCharset(Charset charset) {
+      return setCharset(charset);
+    }
 
     abstract WriteToGcsBuilder setIgnoreColumnFamilies(
         HashSet<String> ignoreColumnFamilies);

@@ -23,6 +23,7 @@ import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsOptions;
 import com.google.cloud.teleport.v2.transforms.FileFormatFactoryBigtableChangeStreams;
 import com.google.cloud.teleport.v2.utils.DurationUtils;
 import com.google.protobuf.ByteString;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.Pipeline;
@@ -100,7 +101,7 @@ public class BigtableChangeStreamsToGcs {
         }
         boolean hasUseRunnerV2 = false;
         for (String experiment : experiments) {
-            if (experiment.toLowerCase().equals(USE_RUNNER_V2_EXPERIMENT)) {
+            if (experiment.equalsIgnoreCase(USE_RUNNER_V2_EXPERIMENT)) {
                 hasUseRunnerV2 = true;
                 break;
             }

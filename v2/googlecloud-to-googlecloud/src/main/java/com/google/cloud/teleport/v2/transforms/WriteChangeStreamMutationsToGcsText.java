@@ -29,6 +29,7 @@ import com.google.cloud.teleport.v2.utils.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
 import com.google.gson.Gson;
+import java.nio.charset.Charset;
 import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -59,7 +60,7 @@ public abstract class WriteChangeStreamMutationsToGcsText
   
   private static final AtomicLong counter = new AtomicLong(0);
   
-  private static String workerId = UUID.randomUUID().toString();
+  private static final String workerId = UUID.randomUUID().toString();
 
   @VisibleForTesting
   protected static final String DEFAULT_OUTPUT_FILE_PREFIX = "output";
@@ -85,12 +86,14 @@ public abstract class WriteChangeStreamMutationsToGcsText
 
   public abstract BigtableSchemaFormat schemaOutputFormat();
 
+  public abstract Charset charset();
+
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
     PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
         .apply("ChangeStreamMutation to ChangelogEntry",
             FlatMapElements.via(new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
-                ignoreColumnFamilies())));
+                ignoreColumnFamilies(), charset())));
     /*
      * Writing as text file using {@link TextIO}.
      *
@@ -151,61 +154,10 @@ public abstract class WriteChangeStreamMutationsToGcsText
     @Override
     public String apply(com.google.cloud.teleport.bigtable.ChangelogEntry entry) {
       return gson.toJson(
-          BigtableUtils.createBigtableRow(entry, workerId, counter),
+          BigtableUtils.createBigtableRow(entry, workerId, counter, charset()),
           BigtableRow.class
       );
     }
-  }
-
-  /**
-   * The {@link WriteToGcsTextOptions} interface provides the custom execution options passed by the
-   * executor at the command-line.
-   */
-  public interface WriteToGcsTextOptions extends BigtableChangeStreamsToGcsFilterOptions, PipelineOptions {
-    @TemplateParameter.GcsWriteFolder(
-        order = 1,
-        description = "Output file directory in Cloud Storage",
-        helpText =
-            "The path and filename prefix for writing output files. Must end with a slash. "
-                + "DateTime formatting is used to parse directory path for date & time formatters.",
-        example = "gs://your-bucket/your-path")
-    String getGcsOutputDirectory();
-
-    void setGcsOutputDirectory(String gcsOutputDirectory);
-
-    @TemplateParameter.Text(
-        order = 2,
-        description = "Output filename prefix of the files to write",
-        helpText = "The prefix to place on each windowed file.",
-        example = "output-")
-    @Default.String("output")
-    String getOutputFilenamePrefix();
-
-    void setOutputFilenamePrefix(String outputFilenamePrefix);
-
-    @TemplateParameter.Integer(
-        order = 3,
-        optional = true,
-        description = "Maximum output shards",
-        helpText =
-            "The maximum number of output shards produced when writing. A higher number of "
-                + "shards means higher throughput for writing to Cloud Storage, but potentially higher "
-                + "data aggregation cost across shards when processing output Cloud Storage files.")
-    @Default.Integer(20)
-    Integer getNumShards();
-
-    void setNumShards(Integer numShards);
-
-    @TemplateParameter.Enum(
-        order = 4,
-        enumOptions = {"SIMPLE", "BIGTABLEROW"},
-        optional = true,
-        description = "Output schema format",
-        helpText = "Schema chosen for outputting data to GCS.")
-    @Default.Enum("SIMPLE")
-    BigtableSchemaFormat getSchemaOutputFormat();
-
-    void setSchemaOutputFormat(BigtableSchemaFormat outputSchemaFormat);
   }
 
   /** Builder for {@link WriteChangeStreamMutationsToGcsText}. */
@@ -226,7 +178,13 @@ public abstract class WriteChangeStreamMutationsToGcsText
 
     abstract WriteToGcsBuilder setSchemaOutputFormat(BigtableSchemaFormat schema);
 
+    abstract WriteToGcsBuilder setCharset(Charset charset);
+
     abstract WriteChangeStreamMutationsToGcsText autoBuild();
+
+    public WriteToGcsBuilder withCharset(Charset charset) {
+      return setCharset(charset);
+    }
 
     public WriteToGcsBuilder withGcsOutputDirectory(String gcsOutputDirectory) {
       checkArgument(

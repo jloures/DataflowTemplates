@@ -18,12 +18,15 @@ package com.google.cloud.teleport.v2.transforms;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsOptions;
+import com.google.cloud.teleport.v2.utils.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.FileFormat;
+import java.nio.charset.Charset;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.POutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The {@link FileFormatFactoryBigtableChangeStreams} class is a {@link PTransform} that takes in
@@ -48,10 +51,13 @@ public abstract class FileFormatFactoryBigtableChangeStreams
 
   @Override
   public POutput expand(PCollection<ChangeStreamMutation> mutations) {
-    POutput output = null;
+    POutput output;
 
     final String errorMessage =
         "Invalid output format:" + outputFileFormat() + ". Supported output formats: TEXT, AVRO";
+
+    // Get the desired charset
+    Charset charset = Charset.forName(options().getBigtableCharset());
 
     /*
      * Calls appropriate class Builder to performs PTransform based on user provided File Format.
@@ -69,6 +75,7 @@ public abstract class FileFormatFactoryBigtableChangeStreams
                     .withIgnoreColumnFamilies(options().getIgnoreColumnFamilies())
                     .withIgnoreColumns(options().getIgnoreColumns())
                     .withSchemaOutputFormat(options().getSchemaOutputFormat())
+                    .withCharset(charset)
                     .build());
         break;
       case TEXT:
@@ -83,6 +90,7 @@ public abstract class FileFormatFactoryBigtableChangeStreams
                     .withIgnoreColumnFamilies(options().getIgnoreColumnFamilies())
                     .withIgnoreColumns(options().getIgnoreColumns())
                     .withSchemaOutputFormat(options().getSchemaOutputFormat())
+                    .withCharset(charset)
                     .build());
         break;
 

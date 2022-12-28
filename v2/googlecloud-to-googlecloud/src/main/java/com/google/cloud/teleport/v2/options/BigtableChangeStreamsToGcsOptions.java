@@ -28,9 +28,7 @@ import org.apache.beam.sdk.options.Validation;
  * The {@link BigtableChangeStreamsToGcsOptions} interface provides the custom execution options
  * passed by the executor at the command-line.
  */
-public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions,
-    WriteChangeStreamMutationToGcsAvro.WriteToGcsAvroOptions,
-    WriteChangeStreamMutationsToGcsText.WriteToGcsTextOptions {
+public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions {
     @TemplateParameter.ProjectId(
         order = 1,
         optional = true,
@@ -69,7 +67,6 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
     String getBigtableAppProfileId();
 
     void setBigtableAppProfileId(String bigtableAppProfileId);
-
 
     @TemplateParameter.DateTime(
         order = 5,
@@ -144,4 +141,47 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
 
     void setSchemaOutputFormat(BigtableSchemaFormat outputSchemaFormat);
 
+    @TemplateParameter.Enum(
+        order = 13,
+        optional = true,
+        description = "Bigtable Charset",
+        helpText = "Bigtable Charset to be used when writing to GCS.")
+    @Default.Enum("UTF-8")
+    String getBigtableCharset();
+
+    void setBigtableCharset(String bigtableCharset);
+
+    @TemplateParameter.GcsWriteFolder(
+        order = 14,
+        description = "Output file directory in Cloud Storage",
+        helpText =
+            "The path and filename prefix for writing output files. Must end with a slash. "
+                + "DateTime formatting is used to parse directory path for date & time formatters.",
+        example = "gs://your-bucket/your-path")
+    String getGcsOutputDirectory();
+
+    void setGcsOutputDirectory(String gcsOutputDirectory);
+
+    @TemplateParameter.Text(
+        order = 15,
+        description = "Output filename prefix of the files to write",
+        helpText = "The prefix to place on each windowed file.",
+        example = "output-")
+    @Default.String("output")
+    String getOutputFilenamePrefix();
+
+    void setOutputFilenamePrefix(String outputFilenamePrefix);
+
+    @TemplateParameter.Integer(
+        order = 16,
+        optional = true,
+        description = "Maximum output shards",
+        helpText =
+            "The maximum number of output shards produced when writing. A higher number of "
+                + "shards means higher throughput for writing to Cloud Storage, but potentially higher "
+                + "data aggregation cost across shards when processing output Cloud Storage files.")
+    @Default.Integer(20)
+    Integer getNumShards();
+
+    void setNumShards(Integer numShards);
 }
