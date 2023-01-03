@@ -15,6 +15,7 @@
  */
 package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
+import com.google.bigtable.repackaged.org.apache.commons.lang3.StringUtils;
 import com.google.cloud.Timestamp;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.teleport.metadata.Template;
@@ -23,7 +24,6 @@ import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsOptions;
 import com.google.cloud.teleport.v2.transforms.FileFormatFactoryBigtableChangeStreams;
 import com.google.cloud.teleport.v2.utils.DurationUtils;
 import com.google.protobuf.ByteString;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.Pipeline;
@@ -67,7 +67,7 @@ public class BigtableChangeStreamsToGcs {
     }
 
     private static String getProjectId(BigtableChangeStreamsToGcsOptions options) {
-        return options.getBigtableProjectId().isEmpty()
+        return StringUtils.isEmpty(options.getBigtableProjectId())
                 ? options.getProject()
                 : options.getBigtableProjectId();
     }
@@ -111,11 +111,6 @@ public class BigtableChangeStreamsToGcs {
         }
         options.setExperiments(experiments);
 
-        String metadataTableName =
-                options.getBigtableMetadataTableId() == null
-                        ? null
-                        : options.getBigtableMetadataTableId();
-
         pipeline
             .apply(
                 BigtableIO.readChangeStream()
@@ -125,7 +120,8 @@ public class BigtableChangeStreamsToGcs {
                     .withTableId(options.getBigtableTableId())
                     .withStartTime(startTimestamp)
                     .withEndTime(endTimestamp)
-                    .withMetadataTableTableId(metadataTableName))
+                    .withMetadataTableInstanceId(options.getBigtableMetadataInstanceId())
+                    .withMetadataTableTableId(options.getBigtableMetadataTableTableId()))
             .apply("Add Processing Time", ParDo.of(
                 new DoFn<KV<ByteString, ChangeStreamMutation>, ChangeStreamMutation>() {
                     @ProcessElement

@@ -18,7 +18,6 @@ package com.google.cloud.teleport.v2.transforms;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsOptions;
-import com.google.cloud.teleport.v2.utils.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.FileFormat;
 import java.nio.charset.Charset;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -26,7 +25,6 @@ import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.POutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.nio.charset.StandardCharsets;
 
 /**
  * The {@link FileFormatFactoryBigtableChangeStreams} class is a {@link PTransform} that takes in

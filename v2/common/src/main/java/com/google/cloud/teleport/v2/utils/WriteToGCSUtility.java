@@ -61,10 +61,4 @@ public class WriteToGCSUtility {
     AVRO,
     PARQUET;
   }
-
-  /** Set Enum BigtableSchemaFormat for all supported schema formats. */
-  public enum BigtableSchemaFormat {
-    SIMPLE,
-    BIGTABLEROW;
-  }
 }

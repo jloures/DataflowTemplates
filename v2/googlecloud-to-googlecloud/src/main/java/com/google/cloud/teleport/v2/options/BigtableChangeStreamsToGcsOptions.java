@@ -16,9 +16,7 @@
 package com.google.cloud.teleport.v2.options;
 
 import com.google.cloud.teleport.metadata.TemplateParameter;
-import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationToGcsAvro;
-import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationsToGcsText;
-import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.FileFormat;
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
 import org.apache.beam.sdk.options.Default;
@@ -28,7 +26,7 @@ import org.apache.beam.sdk.options.Validation;
  * The {@link BigtableChangeStreamsToGcsOptions} interface provides the custom execution options
  * passed by the executor at the command-line.
  */
-public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreamsToGcsFilterOptions {
+public interface BigtableChangeStreamsToGcsOptions extends DataflowPipelineOptions {
     @TemplateParameter.ProjectId(
         order = 1,
         optional = true,
@@ -61,8 +59,8 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
 
     @TemplateParameter.Text(
         order = 4,
-        description = "Bigtable App Profile ID",
-        helpText = "The Bigtable App Profile ID to read change streams from.")
+        description = "Cloud Bigtable application profile name",
+        helpText = "The application profile is used to distinguish workload in Cloud Bigtable")
     @Validation.Required
     String getBigtableAppProfileId();
 
@@ -125,10 +123,10 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
         description = "Bigtable Metadata Table Id",
         helpText = "Table ID used for creating the metadata table.",
         example = "__change_stream_md_table")
-    @Default.String("")
-    String getBigtableMetadataTableId();
+    @Default.String("__change_stream_md_table")
+    String getBigtableMetadataTableTableId();
 
-    void setBigtableMetadataTableId(String bigtableMetadataTableId);
+    void setBigtableMetadataTableTableId(String bigtableMetadataTableTableId);
 
     @TemplateParameter.Enum(
         order = 12,
@@ -141,12 +139,12 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
 
     void setSchemaOutputFormat(BigtableSchemaFormat outputSchemaFormat);
 
-    @TemplateParameter.Enum(
+    @TemplateParameter.Text(
         order = 13,
         optional = true,
-        description = "Bigtable Charset",
-        helpText = "Bigtable Charset to be used when writing to GCS.")
-    @Default.Enum("UTF-8")
+        description = "Bigtable charset name when reading values and column qualifiers.",
+        helpText = "Bigtable charset name when reading values and column qualifiers.")
+    @Default.String("UTF-8")
     String getBigtableCharset();
 
     void setBigtableCharset(String bigtableCharset);
@@ -184,4 +182,36 @@ public interface BigtableChangeStreamsToGcsOptions extends BigtableChangeStreams
     Integer getNumShards();
 
     void setNumShards(Integer numShards);
+
+    @TemplateParameter.Text(
+        order = 17,
+        optional = true,
+        description = "Ignore Column Families",
+        helpText = "A comma-separated list of column families for which changes are to be skipped.",
+        example = "cf1,cf2,cf3")
+    @Default.String("")
+    String getIgnoreColumnFamilies();
+
+    void setIgnoreColumnFamilies(String ignoreColumnFamilies);
+
+    @TemplateParameter.Text(
+        order = 18,
+        optional = true,
+        description = "Ignore Columns",
+        helpText = "A comma-separated list of columnFamily:columnName values for which changes are to be skipped.",
+        example = "cf1:c1,cf2:c2,cf3:c3")
+    @Default.String("")
+    String getIgnoreColumns();
+
+    void setIgnoreColumns(String ignoreColumns);
+
+    @TemplateParameter.Text(
+        order = 19,
+        optional = true,
+        description = "Cloud Bigtable metadata instance ID",
+        helpText = "The Cloud Bigtable instance to use for the change streams connector metadata table.")
+    @Default.String("")
+    String getBigtableMetadataInstanceId();
+
+    void setBigtableMetadataInstanceId(String value);
 }

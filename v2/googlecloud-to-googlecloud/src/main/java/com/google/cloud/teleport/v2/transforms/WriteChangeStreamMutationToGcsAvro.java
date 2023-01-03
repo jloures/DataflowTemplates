@@ -15,28 +15,23 @@
  */
 package com.google.cloud.teleport.v2.transforms;
 
-import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.BIGTABLEROW;
-import static com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat.SIMPLE;
+import static com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat.BIGTABLEROW;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.cloud.teleport.v2.transforms.WriteChangeStreamMutationsToGcsText.WriteToGcsBuilder;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat;
 import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.transforms.FlatMapElements;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
-import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
-import com.google.cloud.teleport.v2.utils.BigtableUtils;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
-import com.google.cloud.teleport.v2.utils.WriteToGCSUtility.BigtableSchemaFormat;
 import java.util.HashSet;
 import java.util.UUID;
 import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.io.FileBasedSink;
-import org.apache.beam.sdk.options.Default;
-import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.values.PCollection;
@@ -101,7 +96,7 @@ public abstract class WriteChangeStreamMutationToGcsAvro
       return changelogEntry
           .apply(
               "ChangelogEntry To BigtableRow",
-              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter)))
+              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, charset())))
           .apply(
           "Writing as Avro",
           AvroIO.write(com.google.cloud.teleport.bigtable.BigtableRow.class)

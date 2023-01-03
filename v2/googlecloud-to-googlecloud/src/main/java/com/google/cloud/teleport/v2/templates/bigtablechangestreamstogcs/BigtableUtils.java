@@ -1,4 +1,4 @@
-package com.google.cloud.teleport.v2.utils;
+package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation.MutationType;
@@ -11,12 +11,9 @@ import com.google.cloud.teleport.bigtable.ChangelogEntry;
 import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.ChangelogColumns;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,15 +40,16 @@ public class BigtableUtils {
       return false;
     }
 
-    String columnFamilyAndQualifier = familyName + ":" + qualifierName;
+    String parsedQualifierName = qualifierName == null ? "" : qualifierName;
+    String columnFamilyAndQualifier = familyName + ":" + parsedQualifierName;
 
     return !ignoreColumns.contains(columnFamilyAndQualifier);
   }
 
   public static com.google.cloud.teleport.bigtable.BigtableRow createBigtableRow(
-      com.google.cloud.teleport.bigtable.ChangelogEntry entry,
+      ChangelogEntry entry,
       String workerId,
-      AtomicLong counter,
+      Long counter,
       Charset charset
   ) {
     java.util.List<com.google.cloud.teleport.bigtable.BigtableCell> cells = new ArrayList<>();
@@ -175,13 +173,13 @@ public class BigtableUtils {
   private static ByteBuffer createChangelogRowKey(
       Long commitTimestamp,
       String workerId,
-      AtomicLong counter,
+      Long counter,
       Charset charset) {
     String rowKey = (commitTimestamp.toString()
         + BigtableUtils.bigtableRowKeyDelimiter
         + workerId
         + BigtableUtils.bigtableRowKeyDelimiter
-        + counter.incrementAndGet());
+        + counter);
 
     return ByteBuffer.wrap(rowKey.getBytes(charset));
   }
@@ -220,14 +218,6 @@ public class BigtableUtils {
       }
     }
     return validEntries;
-  }
-
-  public static Charset getCharset(String charset) {
-    if (charset == null) {
-      return StandardCharsets.UTF_8;
-    }
-
-    return StandardCharsets.UTF_8;
   }
 
   private static com.google.cloud.teleport.bigtable.ChangelogEntry createChangelogEntry(
@@ -302,4 +292,6 @@ public class BigtableUtils {
     LOG.warn("Unknown ChangelogEntry ModType, return ModType.Unknown");
     return com.google.cloud.teleport.bigtable.ModType.UNKNOWN;
   }
+
+
 }
