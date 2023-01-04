@@ -26,15 +26,21 @@ import com.google.cloud.teleport.v2.utils.DurationUtils;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.gcp.bigtable.BigtableIO;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
+import org.apache.beam.sdk.transforms.Values;
+import org.apache.beam.sdk.transforms.windowing.AfterProcessingTime;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
+import org.apache.beam.sdk.transforms.windowing.GlobalWindows;
+import org.apache.beam.sdk.transforms.windowing.Repeatedly;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.KV;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,20 +128,14 @@ public class BigtableChangeStreamsToGcs {
                     .withEndTime(endTimestamp)
                     .withMetadataTableInstanceId(options.getBigtableMetadataInstanceId())
                     .withMetadataTableTableId(options.getBigtableMetadataTableTableId()))
-            .apply("Add Processing Time", ParDo.of(
-                new DoFn<KV<ByteString, ChangeStreamMutation>, ChangeStreamMutation>() {
-                    @ProcessElement
-                    public void processElement(
-                        @Element KV<ByteString, ChangeStreamMutation> element,
-                        OutputReceiver<ChangeStreamMutation> out) {
-                        Instant processingTime = Instant.now();
-                        out.outputWithTimestamp(element.getValue(), processingTime);
-                    }
-                }))
             .apply(
-                "Creating " + options.getWindowDuration() + " Window",
-                Window.into(
-                    FixedWindows.of(DurationUtils.parseDuration(options.getWindowDuration()))))
+                Window.<KV<ByteString, ChangeStreamMutation>>into(new GlobalWindows())
+                    .triggering(
+                        Repeatedly.forever(
+                            AfterProcessingTime.pastFirstElementInPane()
+                                .plusDelayOf(DurationUtils.parseDuration(options.getWindowDuration()))))
+                    .discardingFiredPanes())
+            .apply(Values.create())
             .apply(
                 "Write To GCS",
                 FileFormatFactoryBigtableChangeStreams.newBuilder().setOptions(options).build());
