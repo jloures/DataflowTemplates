@@ -59,7 +59,7 @@ public interface BigtableChangeStreamsToGcsOptions extends DataflowPipelineOptio
 
     @TemplateParameter.Text(
         order = 4,
-        description = "Cloud Bigtable application profile name",
+        description = "Cloud Bigtable application profile id",
         helpText = "The application profile is used to distinguish workload in Cloud Bigtable")
     @Validation.Required
     String getBigtableAppProfileId();
