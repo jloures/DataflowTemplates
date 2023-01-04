@@ -1,10 +1,13 @@
-package com.google.cloud.teleport.v2.transforms;
+package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.BigtableUtils;
 import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.transforms.SimpleFunction;
 
+/**
+ * A {@link org.apache.beam.sdk.transforms.PTransform} which converts items in a {@link org.apache.beam.sdk.values.PCollection}
+ * from {@link com.google.cloud.teleport.bigtable.ChangelogEntry} to {@link com.google.cloud.teleport.bigtable.BigtableRow}
+ */
 public class BigtableChangelogEntryToBigtableRowFn extends
     SimpleFunction<com.google.cloud.teleport.bigtable.ChangelogEntry, com.google.cloud.teleport.bigtable.BigtableRow> {
 

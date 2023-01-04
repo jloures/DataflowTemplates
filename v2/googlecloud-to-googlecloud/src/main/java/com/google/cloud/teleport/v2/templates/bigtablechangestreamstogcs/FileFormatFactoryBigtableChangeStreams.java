@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.google.cloud.teleport.v2.transforms;
+package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
 import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
@@ -40,7 +40,7 @@ public abstract class FileFormatFactoryBigtableChangeStreams
       LoggerFactory.getLogger(FileFormatFactoryBigtableChangeStreams.class);
 
   public static WriteToGcsBuilder newBuilder() {
-    return new AutoValue_FileFormatFactoryBigtableChangeStreams.Builder();
+    return new com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.AutoValue_FileFormatFactoryBigtableChangeStreams.Builder();
   }
 
   public abstract BigtableChangeStreamsToGcsOptions options();

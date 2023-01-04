@@ -1,13 +1,12 @@
 package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model;
 
-import com.google.cloud.teleport.v2.templates.spannerchangestreamstobigquery.model.Mod;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /**
  * The {@link ChangelogColumns} contains all the available properties that are present in a
  * a row which will be written into GCS. Note that these properties are present in
- * {@link ChangelogEntry} and may or may not be required.
+ * {@link com.google.cloud.teleport.bigtable.ChangelogEntry} and may or may not be required.
  */
 public enum ChangelogColumns {
   ROW_KEY("row_key"),

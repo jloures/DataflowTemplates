@@ -13,52 +13,58 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.google.cloud.teleport.v2.transforms;
+package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
-import static com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat.BIGTABLEROW;
+import com.google.auto.value.AutoValue;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
+
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat;
-import java.nio.charset.Charset;
-import java.util.concurrent.atomic.AtomicLong;
-import org.apache.beam.sdk.transforms.FlatMapElements;
-import com.google.auto.value.AutoValue;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
+import com.google.cloud.teleport.bigtable.BigtableRow;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
-import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.BigtableUtils;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
+import com.google.gson.Gson;
+import java.nio.charset.Charset;
 import java.util.HashSet;
 import java.util.UUID;
-import org.apache.beam.sdk.io.AvroIO;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.io.FileBasedSink;
+import org.apache.beam.sdk.io.TextIO;
+import org.apache.beam.sdk.transforms.FlatMapElements;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
+import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
+import org.apache.beam.sdk.values.TypeDescriptors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The {@link WriteChangeStreamMutationToGcsAvro} class is a {@link PTransform} that takes in {@link
- * PCollection} of Bigtable Change Stream Mutations. The transform converts and writes these records to
- * GCS in avro file format.
+ * The {@link WriteChangeStreamMutationsToGcsText} class is a {@link PTransform} that takes in {@link
+ * PCollection} of Bigtable change stream mutations. The transform converts and writes these records to
+ * GCS in JSON text file format.
  */
 @AutoValue
-public abstract class WriteChangeStreamMutationToGcsAvro
+public abstract class WriteChangeStreamMutationsToGcsText
     extends PTransform<PCollection<ChangeStreamMutation>, PDone> {
-  @VisibleForTesting protected static final String DEFAULT_OUTPUT_FILE_PREFIX = "output";
-  /* Logger for class. */
-  private static final Logger LOG = LoggerFactory.getLogger(WriteChangeStreamMutationToGcsAvro.class);
-  private static final long serialVersionUID = 825905520835363852L;
-
+  private static final Gson gson = new Gson();
+  
   private static final AtomicLong counter = new AtomicLong(0);
-
+  
   private static final String workerId = UUID.randomUUID().toString();
 
+  @VisibleForTesting
+  protected static final String DEFAULT_OUTPUT_FILE_PREFIX = "output";
+
+  /* Logger for class. */
+  private static final Logger LOG = LoggerFactory.getLogger(WriteChangeStreamMutationsToGcsText.class);
+
   public static WriteToGcsBuilder newBuilder() {
-    return new AutoValue_WriteChangeStreamMutationToGcsAvro.Builder();
+    return new com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.AutoValue_WriteChangeStreamMutationsToGcsText.Builder();
   }
 
   public abstract String gcsOutputDirectory();
@@ -80,44 +86,48 @@ public abstract class WriteChangeStreamMutationToGcsAvro
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
     PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
-          .apply("ChangeStreamMutation to ChangelogEntry",
-              FlatMapElements.via(
-                  new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
-                      ignoreColumnFamilies(), charset())));
-
+        .apply("ChangeStreamMutation to ChangelogEntry",
+            FlatMapElements.via(new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
+                ignoreColumnFamilies(), charset())));
     /*
-     * Writing as avro file using {@link AvroIO}.
+     * Writing as text file using {@link TextIO}.
      *
      * The {@link WindowedFilenamePolicy} class specifies the file path for writing the file.
      * The {@link withNumShards} option specifies the number of shards passed by the user.
      * The {@link withTempDirectory} option sets the base directory used to generate temporary files.
      */
-    if (schemaOutputFormat() == BIGTABLEROW) {
+    if (schemaOutputFormat() == BigtableSchemaFormat.BIGTABLEROW) {
       return changelogEntry
-          .apply(
-              "ChangelogEntry To BigtableRow",
+          .apply("ChangelogEntry to BigtableRow",
               MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, charset())))
+          .apply(MapElements.into(TypeDescriptors.strings())
+              .via((com.google.cloud.teleport.bigtable.BigtableRow row) -> gson.toJson(row,
+                  com.google.cloud.teleport.bigtable.BigtableRow.class)))
           .apply(
-          "Writing as Avro",
-          AvroIO.write(com.google.cloud.teleport.bigtable.BigtableRow.class)
-              .to(
-                  WindowedFilenamePolicy.writeWindowedFiles()
-                      .withOutputDirectory(gcsOutputDirectory())
-                      .withOutputFilenamePrefix(outputFilenamePrefix())
-                      .withShardTemplate(WriteToGCSUtility.SHARD_TEMPLATE)
-                      .withSuffix(
-                          WriteToGCSUtility.FILE_SUFFIX_MAP.get(
-                              WriteToGCSUtility.FileFormat.AVRO)))
-              .withTempDirectory(
-                  FileBasedSink.convertToFileResourceIfPossible(tempLocation())
-                      .getCurrentDirectory())
-              .withWindowedWrites()
-              .withNumShards(numShards()));
+              "Writing as Text",
+              TextIO.write()
+                  .to(
+                      WindowedFilenamePolicy.writeWindowedFiles()
+                          .withOutputDirectory(gcsOutputDirectory())
+                          .withOutputFilenamePrefix(outputFilenamePrefix())
+                          .withShardTemplate(WriteToGCSUtility.SHARD_TEMPLATE)
+                          .withSuffix(
+                              WriteToGCSUtility.FILE_SUFFIX_MAP.get(
+                                  WriteToGCSUtility.FileFormat.TEXT)))
+                  .withTempDirectory(
+                      FileBasedSink.convertToFileResourceIfPossible(tempLocation())
+                          .getCurrentDirectory())
+                  .withWindowedWrites()
+                  .withNumShards(numShards()));
     }
 
     return changelogEntry
+        .apply(MapElements.into(TypeDescriptors.strings())
+            .via((com.google.cloud.teleport.bigtable.ChangelogEntry row) -> gson.toJson(row,
+                com.google.cloud.teleport.bigtable.ChangelogEntry.class)))
         .apply(
-            AvroIO.write(com.google.cloud.teleport.bigtable.ChangelogEntry.class)
+            "Writing as Text",
+            TextIO.write()
                 .to(
                     WindowedFilenamePolicy.writeWindowedFiles()
                         .withOutputDirectory(gcsOutputDirectory())
@@ -125,7 +135,7 @@ public abstract class WriteChangeStreamMutationToGcsAvro
                         .withShardTemplate(WriteToGCSUtility.SHARD_TEMPLATE)
                         .withSuffix(
                             WriteToGCSUtility.FILE_SUFFIX_MAP.get(
-                                WriteToGCSUtility.FileFormat.AVRO)))
+                                WriteToGCSUtility.FileFormat.TEXT)))
                 .withTempDirectory(
                     FileBasedSink.convertToFileResourceIfPossible(tempLocation())
                         .getCurrentDirectory())
@@ -133,9 +143,22 @@ public abstract class WriteChangeStreamMutationToGcsAvro
                 .withNumShards(numShards()));
   }
 
-  /** Builder for {@link WriteChangeStreamMutationToGcsAvro}. */
+  private class BigtableChangelogEntryToJsonTextFn extends
+      SimpleFunction<com.google.cloud.teleport.bigtable.ChangelogEntry, String> {
+
+    @Override
+    public String apply(com.google.cloud.teleport.bigtable.ChangelogEntry entry) {
+      return gson.toJson(
+          BigtableUtils.createBigtableRow(entry, workerId, counter.incrementAndGet(), charset()),
+          BigtableRow.class
+      );
+    }
+  }
+
+  /** Builder for {@link WriteChangeStreamMutationsToGcsText}. */
   @AutoValue.Builder
   public abstract static class WriteToGcsBuilder {
+
     abstract WriteToGcsBuilder setGcsOutputDirectory(String gcsOutputDirectory);
 
     abstract String gcsOutputDirectory();
@@ -148,24 +171,50 @@ public abstract class WriteChangeStreamMutationToGcsAvro
 
     abstract WriteToGcsBuilder setNumShards(Integer numShards);
 
-    abstract WriteChangeStreamMutationToGcsAvro autoBuild();
+    abstract WriteToGcsBuilder setSchemaOutputFormat(BigtableSchemaFormat schema);
 
     abstract WriteToGcsBuilder setCharset(Charset charset);
 
+    abstract WriteChangeStreamMutationsToGcsText autoBuild();
+
     public WriteToGcsBuilder withCharset(Charset charset) {
       return setCharset(charset);
+    }
+
+    public WriteToGcsBuilder withGcsOutputDirectory(String gcsOutputDirectory) {
+      checkArgument(
+          gcsOutputDirectory != null,
+          "withGcsOutputDirectory(gcsOutputDirectory) called with null input.");
+      return setGcsOutputDirectory(gcsOutputDirectory);
+    }
+
+    public WriteToGcsBuilder withTempLocation(String tempLocation) {
+      checkArgument(tempLocation != null, "withTempLocation(tempLocation) called with null input.");
+      return setTempLocation(tempLocation);
+    }
+
+    public WriteToGcsBuilder withOutputFilenamePrefix(String outputFilenamePrefix) {
+      if (outputFilenamePrefix == null) {
+        LOG.info("Defaulting output filename prefix to: {}", DEFAULT_OUTPUT_FILE_PREFIX);
+        outputFilenamePrefix = DEFAULT_OUTPUT_FILE_PREFIX;
+      }
+      return setOutputFilenamePrefix(outputFilenamePrefix);
+    }
+
+    public WriteToGcsBuilder withSchemaOutputFormat(BigtableSchemaFormat schema) {
+      return setSchemaOutputFormat(schema);
+    }
+
+    public WriteChangeStreamMutationsToGcsText build() {
+      checkNotNull(gcsOutputDirectory(), "Provide output directory to write to.");
+      checkNotNull(tempLocation(), "Temporary directory needs to be provided.");
+      return autoBuild();
     }
 
     abstract WriteToGcsBuilder setIgnoreColumnFamilies(
         HashSet<String> ignoreColumnFamilies);
 
     abstract WriteToGcsBuilder setIgnoreColumns(HashSet<String> ignoreColumns);
-
-    abstract WriteToGcsBuilder setSchemaOutputFormat(BigtableSchemaFormat schema);
-
-    public WriteToGcsBuilder withSchemaOutputFormat(BigtableSchemaFormat schema) {
-      return setSchemaOutputFormat(schema);
-    }
 
     public WriteToGcsBuilder withIgnoreColumnFamilies(String ignoreColumnFamilies) {
       checkArgument(ignoreColumnFamilies != null, "withIgnoreColumnFamilies(ignoreColumnFamilies) called with null input.");
@@ -192,32 +241,6 @@ public abstract class WriteChangeStreamMutationToGcsAvro
         parsedColumns.add(trimmedColumns);
       }
       return setIgnoreColumns(parsedColumns);
-    }
-
-    public WriteToGcsBuilder withGcsOutputDirectory(String gcsOutputDirectory) {
-      checkArgument(
-          gcsOutputDirectory != null,
-          "withGcsOutputDirectory(gcsOutputDirectory) called with null input.");
-      return setGcsOutputDirectory(gcsOutputDirectory);
-    }
-
-    public WriteToGcsBuilder withTempLocation(String tempLocation) {
-      checkArgument(tempLocation != null, "withTempLocation(tempLocation) called with null input.");
-      return setTempLocation(tempLocation);
-    }
-
-    public WriteToGcsBuilder withOutputFilenamePrefix(String outputFilenamePrefix) {
-      if (outputFilenamePrefix == null) {
-        LOG.info("Defaulting output filename prefix to: {}", DEFAULT_OUTPUT_FILE_PREFIX);
-        outputFilenamePrefix = DEFAULT_OUTPUT_FILE_PREFIX;
-      }
-      return setOutputFilenamePrefix(outputFilenamePrefix);
-    }
-
-    public WriteChangeStreamMutationToGcsAvro build() {
-      checkNotNull(gcsOutputDirectory(), "Provide output directory to write to. ");
-      checkNotNull(tempLocation(), "Temporary directory needs to be provided. ");
-      return autoBuild();
     }
   }
 }
