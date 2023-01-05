@@ -161,9 +161,9 @@ public class BigtableUtils implements Serializable {
       // column
       cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
           this.bigtableRowColumnFamilyName,
-          ChangelogColumns.LOW_WATERMARK.getColumnNameAsByteBuffer(),
+          ChangelogColumns.COLUMN.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getLowWatermark()))
+          entry.getColumn()
       ));
     }
 
@@ -201,9 +201,9 @@ public class BigtableUtils implements Serializable {
       // value
       cells.add(new com.google.cloud.teleport.bigtable.BigtableCell(
           this.bigtableRowColumnFamilyName,
-          ChangelogColumns.TIMESTAMP_FROM.getColumnNameAsByteBuffer(),
+          ChangelogColumns.VALUE.getColumnNameAsByteBuffer(),
           entry.getTimestamp(),
-          getByteBufferFromString(String.valueOf(entry.getValue()))
+          entry.getValue()
       ));
     }
 
