@@ -21,6 +21,7 @@ import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import com.google.cloud.teleport.metadata.Template;
 import com.google.cloud.teleport.metadata.TemplateCategory;
 import com.google.cloud.teleport.v2.options.BigtableChangeStreamsToGcsOptions;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSource;
 import com.google.cloud.teleport.v2.utils.DurationUtils;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
@@ -71,6 +72,12 @@ public class BigtableChangeStreamsToGcs {
                 : options.getBigtableProjectId();
     }
 
+    private static String getBigtableCharset(BigtableChangeStreamsToGcsOptions options) {
+        return StringUtils.isEmpty(options.getBigtableCharset())
+            ? "UTF-8"
+            : options.getBigtableCharset();
+    }
+
     public static PipelineResult run(BigtableChangeStreamsToGcsOptions options) {
         LOG.info("Requested File Format is " + options.getOutputFileFormat());
         options.setStreaming(true);
@@ -91,6 +98,16 @@ public class BigtableChangeStreamsToGcs {
                 options.getEndTimestamp().isEmpty()
                         ? Timestamp.MAX_VALUE
                         : Timestamp.parseTimestamp(options.getEndTimestamp());
+
+        BigtableSource sourceInfo = new BigtableSource(
+            options.getBigtableInstanceId(),
+            options.getBigtableTableId(),
+            getBigtableCharset(options),
+            options.getIgnoreColumnFamilies(),
+            options.getIgnoreColumns()
+        );
+
+        BigtableUtils bigtableUtils = new BigtableUtils(sourceInfo);
 
         // Add use_runner_v2 to the experiments option, since Change Streams connector is only supported
         // on Dataflow runner v2.
@@ -131,7 +148,8 @@ public class BigtableChangeStreamsToGcs {
             .apply(Values.create())
             .apply(
                 "Write To GCS",
-                FileFormatFactoryBigtableChangeStreams.newBuilder().setOptions(options).build());
+                FileFormatFactoryBigtableChangeStreams.newBuilder().setOptions(options)
+                    .setBigtableUtils(bigtableUtils).build());
 
         return pipeline.run();
     }

@@ -47,6 +47,8 @@ public abstract class FileFormatFactoryBigtableChangeStreams
 
   public abstract FileFormat outputFileFormat();
 
+  public abstract BigtableUtils bigtableUtils();
+
   @Override
   public POutput expand(PCollection<ChangeStreamMutation> mutations) {
     POutput output;
@@ -70,10 +72,7 @@ public abstract class FileFormatFactoryBigtableChangeStreams
                     .withOutputFilenamePrefix(options().getOutputFilenamePrefix())
                     .setNumShards(options().getNumShards())
                     .withTempLocation(options().getTempLocation())
-                    .withIgnoreColumnFamilies(options().getIgnoreColumnFamilies())
-                    .withIgnoreColumns(options().getIgnoreColumns())
-                    .withSchemaOutputFormat(options().getSchemaOutputFormat())
-                    .withCharset(charset)
+                    .withBigtableUtils(bigtableUtils())
                     .build());
         break;
       case TEXT:
@@ -85,10 +84,8 @@ public abstract class FileFormatFactoryBigtableChangeStreams
                     .withOutputFilenamePrefix(options().getOutputFilenamePrefix())
                     .setNumShards(options().getNumShards())
                     .withTempLocation(options().getTempLocation())
-                    .withIgnoreColumnFamilies(options().getIgnoreColumnFamilies())
-                    .withIgnoreColumns(options().getIgnoreColumns())
                     .withSchemaOutputFormat(options().getSchemaOutputFormat())
-                    .withCharset(charset)
+                    .withBigtableUtils(bigtableUtils())
                     .build());
         break;
 
@@ -106,6 +103,8 @@ public abstract class FileFormatFactoryBigtableChangeStreams
     public abstract WriteToGcsBuilder setOptions(BigtableChangeStreamsToGcsOptions options);
 
     public abstract WriteToGcsBuilder setOutputFileFormat(FileFormat outputFileFormat);
+
+    public abstract WriteToGcsBuilder setBigtableUtils(BigtableUtils bigtableUtils);
 
     abstract BigtableChangeStreamsToGcsOptions options();
 

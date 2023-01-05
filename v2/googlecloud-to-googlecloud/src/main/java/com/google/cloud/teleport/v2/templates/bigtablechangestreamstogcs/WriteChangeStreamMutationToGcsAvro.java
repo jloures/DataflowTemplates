@@ -23,12 +23,10 @@ import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.transforms.FlatMapElements;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
-import java.util.HashSet;
 import java.util.UUID;
 import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.io.FileBasedSink;
@@ -68,21 +66,16 @@ public abstract class WriteChangeStreamMutationToGcsAvro
 
   public abstract Integer numShards();
 
-  public abstract HashSet<String> ignoreColumnFamilies();
-
-  public abstract HashSet<String> ignoreColumns();
-
   public abstract BigtableSchemaFormat schemaOutputFormat();
 
-  public abstract Charset charset();
+  public abstract BigtableUtils bigtableUtils();
 
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
     PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
           .apply("ChangeStreamMutation to ChangelogEntry",
               FlatMapElements.via(
-                  new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
-                      ignoreColumnFamilies(), charset())));
+                  new BigtableChangeStreamMutationToChangelogEntryFn(bigtableUtils())));
 
     /*
      * Writing as avro file using {@link AvroIO}.
@@ -95,7 +88,7 @@ public abstract class WriteChangeStreamMutationToGcsAvro
       return changelogEntry
           .apply(
               "ChangelogEntry To BigtableRow",
-              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, charset())))
+              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, bigtableUtils())))
           .apply(
           "Writing as Avro",
           AvroIO.write(com.google.cloud.teleport.bigtable.BigtableRow.class)
@@ -149,48 +142,16 @@ public abstract class WriteChangeStreamMutationToGcsAvro
 
     abstract WriteChangeStreamMutationToGcsAvro autoBuild();
 
-    abstract WriteToGcsBuilder setCharset(Charset charset);
+    abstract WriteToGcsBuilder setBigtableUtils(BigtableUtils bigtableUtils);
 
-    public WriteToGcsBuilder withCharset(Charset charset) {
-      return setCharset(charset);
+    public WriteToGcsBuilder withBigtableUtils(BigtableUtils bigtableUtils) {
+      return setBigtableUtils(bigtableUtils);
     }
-
-    abstract WriteToGcsBuilder setIgnoreColumnFamilies(
-        HashSet<String> ignoreColumnFamilies);
-
-    abstract WriteToGcsBuilder setIgnoreColumns(HashSet<String> ignoreColumns);
 
     abstract WriteToGcsBuilder setSchemaOutputFormat(BigtableSchemaFormat schema);
 
     public WriteToGcsBuilder withSchemaOutputFormat(BigtableSchemaFormat schema) {
       return setSchemaOutputFormat(schema);
-    }
-
-    public WriteToGcsBuilder withIgnoreColumnFamilies(String ignoreColumnFamilies) {
-      checkArgument(ignoreColumnFamilies != null, "withIgnoreColumnFamilies(ignoreColumnFamilies) called with null input.");
-      HashSet<String> parsedColumnFamilies = new HashSet<>();
-      for (String word : ignoreColumnFamilies.split(",")) {
-        String columnFamily = word.trim();
-        if (columnFamily.length() == 0) {
-          continue;
-        }
-        parsedColumnFamilies.add(columnFamily);
-      }
-      return setIgnoreColumnFamilies(parsedColumnFamilies);
-    }
-
-    public WriteToGcsBuilder withIgnoreColumns(String ignoreColumns) {
-      checkArgument(ignoreColumns != null, "withIgnoreColumns(ignoreColumns) called with null input.");
-      HashSet<String> parsedColumns = new HashSet<>();
-      for (String word : ignoreColumns.split(",")) {
-        String trimmedColumns = word.trim();
-        if (trimmedColumns.length() == 0) {
-          continue;
-        }
-        checkArgument(trimmedColumns.matches(BigtableUtils.columnPattern), "The Column specified does not follow the required format of 'cf1:c1, cf2:c2 ...'");
-        parsedColumns.add(trimmedColumns);
-      }
-      return setIgnoreColumns(parsedColumns);
     }
 
     public WriteToGcsBuilder withGcsOutputDirectory(String gcsOutputDirectory) {

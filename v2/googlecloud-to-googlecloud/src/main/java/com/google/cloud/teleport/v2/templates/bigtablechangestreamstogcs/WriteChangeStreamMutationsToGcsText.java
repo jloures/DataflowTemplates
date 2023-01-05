@@ -15,20 +15,17 @@
  */
 package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs;
 
-import com.google.auto.value.AutoValue;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
-
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.auto.value.AutoValue;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.annotations.VisibleForTesting;
+
 import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model.BigtableSchemaFormat;
 import com.google.cloud.bigtable.data.v2.models.ChangeStreamMutation;
-import com.google.cloud.teleport.bigtable.BigtableRow;
 import com.google.cloud.teleport.v2.io.WindowedFilenamePolicy;
 import com.google.cloud.teleport.v2.utils.WriteToGCSUtility;
 import com.google.gson.Gson;
-import java.nio.charset.Charset;
-import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.beam.sdk.io.FileBasedSink;
@@ -36,7 +33,6 @@ import org.apache.beam.sdk.io.TextIO;
 import org.apache.beam.sdk.transforms.FlatMapElements;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PDone;
 import org.apache.beam.sdk.values.TypeDescriptors;
@@ -75,20 +71,15 @@ public abstract class WriteChangeStreamMutationsToGcsText
 
   public abstract Integer numShards();
 
-  public abstract HashSet<String> ignoreColumnFamilies();
-
-  public abstract HashSet<String> ignoreColumns();
+  public abstract BigtableUtils bigtableUtils();
 
   public abstract BigtableSchemaFormat schemaOutputFormat();
-
-  public abstract Charset charset();
 
   @Override
   public PDone expand(PCollection<ChangeStreamMutation> mutations) {
     PCollection<com.google.cloud.teleport.bigtable.ChangelogEntry> changelogEntry = mutations
         .apply("ChangeStreamMutation to ChangelogEntry",
-            FlatMapElements.via(new BigtableChangeStreamMutationToChangelogEntryFn(ignoreColumns(),
-                ignoreColumnFamilies(), charset())));
+            FlatMapElements.via(new BigtableChangeStreamMutationToChangelogEntryFn(bigtableUtils())));
     /*
      * Writing as text file using {@link TextIO}.
      *
@@ -99,7 +90,7 @@ public abstract class WriteChangeStreamMutationsToGcsText
     if (schemaOutputFormat() == BigtableSchemaFormat.BIGTABLEROW) {
       return changelogEntry
           .apply("ChangelogEntry to BigtableRow",
-              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, charset())))
+              MapElements.via(new BigtableChangelogEntryToBigtableRowFn(workerId, counter, bigtableUtils())))
           .apply(MapElements.into(TypeDescriptors.strings())
               .via((com.google.cloud.teleport.bigtable.BigtableRow row) -> gson.toJson(row,
                   com.google.cloud.teleport.bigtable.BigtableRow.class)))
@@ -143,18 +134,6 @@ public abstract class WriteChangeStreamMutationsToGcsText
                 .withNumShards(numShards()));
   }
 
-  private class BigtableChangelogEntryToJsonTextFn extends
-      SimpleFunction<com.google.cloud.teleport.bigtable.ChangelogEntry, String> {
-
-    @Override
-    public String apply(com.google.cloud.teleport.bigtable.ChangelogEntry entry) {
-      return gson.toJson(
-          BigtableUtils.createBigtableRow(entry, workerId, counter.incrementAndGet(), charset()),
-          BigtableRow.class
-      );
-    }
-  }
-
   /** Builder for {@link WriteChangeStreamMutationsToGcsText}. */
   @AutoValue.Builder
   public abstract static class WriteToGcsBuilder {
@@ -173,12 +152,12 @@ public abstract class WriteChangeStreamMutationsToGcsText
 
     abstract WriteToGcsBuilder setSchemaOutputFormat(BigtableSchemaFormat schema);
 
-    abstract WriteToGcsBuilder setCharset(Charset charset);
-
     abstract WriteChangeStreamMutationsToGcsText autoBuild();
 
-    public WriteToGcsBuilder withCharset(Charset charset) {
-      return setCharset(charset);
+    abstract WriteToGcsBuilder setBigtableUtils(BigtableUtils bigtableUtils);
+
+    public WriteToGcsBuilder withBigtableUtils(BigtableUtils bigtableUtils) {
+      return setBigtableUtils(bigtableUtils);
     }
 
     public WriteToGcsBuilder withGcsOutputDirectory(String gcsOutputDirectory) {
@@ -209,38 +188,6 @@ public abstract class WriteChangeStreamMutationsToGcsText
       checkNotNull(gcsOutputDirectory(), "Provide output directory to write to.");
       checkNotNull(tempLocation(), "Temporary directory needs to be provided.");
       return autoBuild();
-    }
-
-    abstract WriteToGcsBuilder setIgnoreColumnFamilies(
-        HashSet<String> ignoreColumnFamilies);
-
-    abstract WriteToGcsBuilder setIgnoreColumns(HashSet<String> ignoreColumns);
-
-    public WriteToGcsBuilder withIgnoreColumnFamilies(String ignoreColumnFamilies) {
-      checkArgument(ignoreColumnFamilies != null, "withIgnoreColumnFamilies(ignoreColumnFamilies) called with null input.");
-      HashSet<String> parsedColumnFamilies = new HashSet<>();
-      for (String word : ignoreColumnFamilies.split(",")) {
-        String columnFamily = word.trim();
-        if (columnFamily.length() == 0) {
-          continue;
-        }
-        parsedColumnFamilies.add(columnFamily);
-      }
-      return setIgnoreColumnFamilies(parsedColumnFamilies);
-    }
-
-    public WriteToGcsBuilder withIgnoreColumns(String ignoreColumns) {
-      checkArgument(ignoreColumns != null, "withIgnoreColumns(ignoreColumns) called with null input.");
-      HashSet<String> parsedColumns = new HashSet<>();
-      for (String word : ignoreColumns.split(",")) {
-        String trimmedColumns = word.trim();
-        if (trimmedColumns.length() == 0) {
-          continue;
-        }
-        checkArgument(trimmedColumns.matches(BigtableUtils.columnPattern), "The Column specified does not follow the required format of 'cf1:c1, cf2:c2 ...'");
-        parsedColumns.add(trimmedColumns);
-      }
-      return setIgnoreColumns(parsedColumns);
     }
   }
 }
