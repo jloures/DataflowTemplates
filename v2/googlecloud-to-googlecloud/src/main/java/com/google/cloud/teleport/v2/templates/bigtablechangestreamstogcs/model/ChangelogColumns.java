@@ -1,7 +1,10 @@
 package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.BigtableUtils;
+import org.apache.commons.lang.CharSet;
 
 /**
  * The {@link ChangelogColumns} contains all the available properties that are present in a
@@ -32,7 +35,7 @@ public enum ChangelogColumns {
     return this.columnName;
   }
 
-  public ByteBuffer getColumnNameAsByteBuffer() {
-    return ByteBuffer.wrap(this.columnName.getBytes(StandardCharsets.UTF_8));
+  public ByteBuffer getColumnNameAsByteBuffer(Charset charset) {
+    return BigtableUtils.copyByteBuffer(ByteBuffer.wrap(this.columnName.getBytes(charset)));
   }
 }

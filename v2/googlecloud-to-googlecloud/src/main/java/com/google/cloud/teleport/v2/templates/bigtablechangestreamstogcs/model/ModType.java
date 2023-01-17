@@ -1,7 +1,10 @@
 package com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.model;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import com.google.cloud.teleport.bigtable.BigtableCell;
+import com.google.cloud.teleport.v2.templates.bigtablechangestreamstogcs.BigtableUtils;
 
 /**
  * {@link ModType} represents the type of Modification that CDC
@@ -23,7 +26,7 @@ public enum ModType {
     return this.propertyName;
   }
 
-  public ByteBuffer getPropertyNameAsByteBuffer() {
-    return ByteBuffer.wrap(this.propertyName.getBytes(StandardCharsets.UTF_8));
+  public ByteBuffer getPropertyNameAsByteBuffer(Charset charset) {
+    return BigtableUtils.copyByteBuffer(ByteBuffer.wrap(this.propertyName.getBytes(charset)));
   }
 }

@@ -56,9 +56,6 @@ public abstract class FileFormatFactoryBigtableChangeStreams
     final String errorMessage =
         "Invalid output format:" + outputFileFormat() + ". Supported output formats: TEXT, AVRO";
 
-    // Get the desired charset
-    Charset charset = Charset.forName(options().getBigtableCharset());
-
     /*
      * Calls appropriate class Builder to performs PTransform based on user provided File Format.
      */
